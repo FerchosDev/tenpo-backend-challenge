@@ -14,6 +14,7 @@ Developer en **Tenpo**.
 - [Arquitectura](#arquitectura)
 - [Stack técnico](#stack-técnico)
 - [Cómo levantar el proyecto](#cómo-levantar-el-proyecto)
+- [Imagen en Docker Hub](#imagen-en-docker-hub)
 - [Documentación de la API (Swagger)](#documentación-de-la-api-swagger)
 - [Endpoints y ejemplos](#endpoints-y-ejemplos)
 - [Tests](#tests)
@@ -79,40 +80,48 @@ para simetría.
 | Paginación               | `Pageable` / `Page<T>` nativo de Spring Data         |
 | Documentación API        | springdoc-openapi (Swagger UI)                       |
 | Testing                  | JUnit 5 + Mockito (unitarios), TestContainers (integración) |
-| Contenedores             | Docker Compose (PostgreSQL); Dockerfile de la API pendiente para un commit posterior |
+| Contenedores             | Dockerfile multi-stage (build con Maven, runtime con JRE Alpine) + Docker Compose (API + PostgreSQL) |
 
 ## Cómo levantar el proyecto
 
-### Prerequisitos
+### Opción A: todo en Docker (recomendado, sin pasos manuales)
 
+Prerequisito: Docker Desktop.
+
+```bash
+docker compose up --build
+```
+
+Esto construye la imagen de la API (`Dockerfile` multi-stage: build con
+`maven:3.9-eclipse-temurin-21`, runtime con `eclipse-temurin:21-jre-alpine`,
+copiando solo el jar final) y levanta dos contenedores:
+
+- `tenpo-postgres`: Postgres con healthcheck (`pg_isready`).
+- `tenpo-api`: la API, con `depends_on: condition: service_healthy` — no
+  arranca hasta que Postgres esté realmente listo para aceptar conexiones,
+  evitando problemas de timing en el primer arranque.
+
+La API queda disponible en `http://localhost:8080` sin ningún paso manual
+adicional (ni crear la base, ni esperar a Postgres a mano).
+
+### Opción B: API local + Postgres en Docker
+
+Prerequisitos:
 - Java 21
 - Docker Desktop (para PostgreSQL)
 - No hace falta tener Maven instalado: el proyecto incluye Maven Wrapper (`./mvnw` / `mvnw.cmd`)
 
-### 1. Levantar PostgreSQL
-
 ```bash
-docker compose up -d
-```
-
-Esto levanta un contenedor `tenpo-postgres` con la base `tenpo_challenge`
-(usuario/password `tenpo`/`tenpo`), puerto `5432` expuesto y volumen
-persistente.
-
-### 2. Correr la aplicación
-
-```bash
+docker compose up -d postgres
 ./mvnw spring-boot:run
 ```
 
 Por defecto corre con el perfil `dev` (`application-dev.yml`), que apunta a
-`localhost:5432`. La app queda disponible en `http://localhost:8080`.
+`localhost:5432`. El perfil `docker` (`application-docker.yml`), usado por
+el contenedor de la API, apunta al hostname `postgres` en vez de
+`localhost`.
 
-> El perfil `docker` (`application-docker.yml`) ya está preparado para
-> cuando se agregue el servicio de la API al `docker-compose.yml` (apunta al
-> hostname `postgres` en vez de `localhost`).
-
-### 3. Correr los tests
+### Correr los tests
 
 ```bash
 ./mvnw test
@@ -312,4 +321,14 @@ con header `Retry-After` y status `429`.
   único (`timestamp, status, error, message, path`) para validación (400),
   servicio externo caído (503) y errores no controlados (500, sin exponer
   detalles internos al cliente).
+- **Dockerfile multi-stage**: la etapa de build usa `maven:3.9-eclipse-temurin-21`
+  (compila y empaqueta el jar, sin necesitar Maven ni JDK en el runtime),
+  la etapa final usa `eclipse-temurin:21-jre-alpine` (solo JRE, no JDK
+  completo) y copia únicamente el jar final — imagen final más liviana,
+  sin herramientas de build ni código fuente.
+- **`depends_on` con healthcheck (no solo orden de arranque)**: el
+  contenedor de la API espera a que Postgres esté `healthy` según
+  `pg_isready`, no solo a que el contenedor exista — evita que la API
+  intente conectarse antes de que Postgres acepte conexiones reales,
+  sin necesitar lógica de retry manual adicional.
 - **Arquitectura hexagonal**: ver sección [Arquitectura](#arquitectura).
