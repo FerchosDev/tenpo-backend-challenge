@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tenpo_challenge
+    username: tenpo
+    password: tenpo
+    driver-class-name: org.postgresql.Driver
+
+logging:
+  level:
+    com.tenpo.challenge: DEBUG
