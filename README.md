@@ -14,7 +14,6 @@ Developer en **Tenpo**.
 - [Arquitectura](#arquitectura)
 - [Stack técnico](#stack-técnico)
 - [Cómo levantar el proyecto](#cómo-levantar-el-proyecto)
-- [Imagen en Docker Hub](#imagen-en-docker-hub)
 - [Documentación de la API (Swagger)](#documentación-de-la-api-swagger)
 - [Endpoints y ejemplos](#endpoints-y-ejemplos)
 - [Tests](#tests)
