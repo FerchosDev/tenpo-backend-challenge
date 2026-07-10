@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tenpo-postgres
+    environment:
+      POSTGRES_DB: tenpo_challenge
+      POSTGRES_USER: tenpo
+      POSTGRES_PASSWORD: tenpo
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
