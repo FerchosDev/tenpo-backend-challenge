@@ -1,6 +1,8 @@
 package com.tenpo.challenge.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tenpo.challenge.domain.model.CallHistory;
+import com.tenpo.challenge.domain.port.out.CallHistoryPort;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
@@ -27,12 +29,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private static final int CAPACITY = 3;
     private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
+    private static final String HISTORY_ENDPOINT = "/api/v1/history";
 
     private final Bucket bucket;
     private final ObjectMapper objectMapper;
+    private final CallHistoryPort callHistoryPort;
 
-    public RateLimitFilter(ObjectMapper objectMapper) {
+    public RateLimitFilter(ObjectMapper objectMapper, CallHistoryPort callHistoryPort) {
         this.objectMapper = objectMapper;
+        this.callHistoryPort = callHistoryPort;
         Bandwidth limit = Bandwidth.builder()
                 .capacity(CAPACITY)
                 .refillIntervally(CAPACITY, REFILL_PERIOD)
@@ -51,11 +56,20 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         long retryAfterSeconds = TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill());
-        RateLimitExceededResponse body = new RateLimitExceededResponse(
-                "Rate limit exceeded: maximum " + CAPACITY + " requests per minute allowed.",
-                Instant.now(),
-                retryAfterSeconds
-        );
+        String message = "Rate limit exceeded: maximum " + CAPACITY + " requests per minute allowed.";
+        RateLimitExceededResponse body = new RateLimitExceededResponse(message, Instant.now(), retryAfterSeconds);
+
+        // Se loguea acá, no en CallHistoryLoggingAspect: el request nunca
+        // llega a despachar al controller, así que ese @Around nunca se
+        // ejecuta para las llamadas rechazadas por rate limit. No se
+        // capturan params: leer el body acá lo consumiría antes de que
+        // llegue (si acaso llegara) al controller. Se excluye el propio
+        // endpoint de historial: no tiene sentido que una consulta al
+        // historial quede registrada dentro del historial.
+        if (!HISTORY_ENDPOINT.equals(request.getRequestURI())) {
+            callHistoryPort.save(new CallHistory(
+                    null, Instant.now(), request.getRequestURI(), null, null, message, HttpStatus.TOO_MANY_REQUESTS.value()));
+        }
 
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

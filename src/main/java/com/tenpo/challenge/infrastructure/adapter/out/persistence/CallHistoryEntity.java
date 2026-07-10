@@ -1,5 +1,6 @@
 package com.tenpo.challenge.infrastructure.adapter.out.persistence;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -11,6 +12,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -33,11 +36,13 @@ public class CallHistoryEntity {
     @Column(nullable = false)
     private String endpoint;
 
-    @Column(columnDefinition = "TEXT")
-    private String params;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private JsonNode params;
 
-    @Column(columnDefinition = "TEXT")
-    private String response;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private JsonNode response;
 
     @Column(columnDefinition = "TEXT")
     private String error;

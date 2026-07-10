@@ -14,6 +14,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -21,7 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * Test de integración con Postgres real (TestContainers), sin mocks de
  * persistencia. Verifica el flujo completo: POST /calculate -> historial
- * guardado async -> GET /history lo expone paginado.
+ * guardado async -> GET /history lo expone paginado, con params/response
+ * como objetos JSON anidados (no strings escapados) y sin exponer los
+ * campos internos de Page (pageable, sort) en el body raíz.
  */
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -45,11 +48,24 @@ class CallHistoryIntegrationTest {
 
         Map<String, Object> history = awaitHistoryWithAtLeastOneEntry();
 
+        assertThat(history).doesNotContainKeys("pageable", "sort");
         assertThat((Integer) history.get("totalElements")).isGreaterThanOrEqualTo(1);
+        assertThat(history).containsKeys("content", "page", "size", "totalElements", "totalPages", "last");
+
         @SuppressWarnings("unchecked")
-        Map<String, Object> firstEntry = ((java.util.List<Map<String, Object>>) history.get("content")).get(0);
+        Map<String, Object> firstEntry = ((List<Map<String, Object>>) history.get("content")).get(0);
         assertThat(firstEntry.get("endpoint")).isEqualTo("/api/v1/calculate");
         assertThat(firstEntry.get("status")).isEqualTo(200);
+
+        assertThat(firstEntry.get("params")).isInstanceOf(Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> params = (Map<String, Object>) firstEntry.get("params");
+        assertThat(params).containsEntry("num1", 5).containsEntry("num2", 5);
+
+        assertThat(firstEntry.get("response")).isInstanceOf(Map.class);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> responseBody = (Map<String, Object>) firstEntry.get("response");
+        assertThat(responseBody).containsEntry("result", 11.00);
     }
 
     @SuppressWarnings("unchecked")
