@@ -1,12 +1,14 @@
 package com.tenpo.challenge.infrastructure.adapter.in.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tenpo.challenge.domain.exception.ExternalServiceException;
 import com.tenpo.challenge.domain.model.CallHistory;
 import com.tenpo.challenge.domain.port.out.CallHistoryPort;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -30,9 +32,16 @@ public class CallHistoryLoggingAspect {
             callHistoryPort.save(new CallHistory(null, Instant.now(), CALCULATE_ENDPOINT, params, toJson(response), null, 200));
             return response;
         } catch (Exception ex) {
-            callHistoryPort.save(new CallHistory(null, Instant.now(), CALCULATE_ENDPOINT, params, null, ex.getMessage(), 500));
+            callHistoryPort.save(new CallHistory(null, Instant.now(), CALCULATE_ENDPOINT, params, null, ex.getMessage(), statusFor(ex)));
             throw ex;
         }
+    }
+
+    private int statusFor(Exception ex) {
+        if (ex instanceof ExternalServiceException) {
+            return HttpStatus.SERVICE_UNAVAILABLE.value();
+        }
+        return HttpStatus.INTERNAL_SERVER_ERROR.value();
     }
 
     private String toJson(Object value) {
