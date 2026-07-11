@@ -1,0 +1,409 @@
+{
+	"info": {
+		"_postman_id": "b7e2a6b1-3f2a-4c9a-9a2e-4f2c9c1a7e10",
+		"name": "Tenpo Backend Challenge",
+		"description": "API REST en Spring Boot que suma dos números y aplica un porcentaje dinámico obtenido de un servicio externo (mockeado). Incluye reintentos, historial de invocaciones persistido de forma asíncrona, rate limiting (3 RPM) y manejo centralizado de errores.\n\nNo requiere autenticación.\n\nLevantar el proyecto (ver README):\n```\ndocker compose up --build\n```\nLa API queda disponible en http://localhost:8080 (Swagger UI en /swagger-ui.html).\n\nVariable `baseUrl` ya apunta a http://localhost:8080 — cambiala en el entorno/colección si corriste la API en otro host/puerto.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "0"
+	},
+	"item": [
+		{
+			"name": "Calculation",
+			"item": [
+				{
+					"name": "POST /calculate - happy path",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"num1\": 5,\n  \"num2\": 5\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/calculate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"calculate"
+							]
+						},
+						"description": "Suma num1 + num2 y aplica el porcentaje del servicio externo mockeado (fijo en 10%).\n\nRespuesta esperada:\n```json\n{\"num1\": 5, \"num2\": 5, \"percentage\": 10, \"result\": 11.00}\n```"
+					},
+					"response": []
+				},
+				{
+					"name": "POST /calculate - decimal numbers",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"num1\": 12.5,\n  \"num2\": 7.25\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/calculate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"calculate"
+							]
+						},
+						"description": "Verifica que el cálculo funciona correctamente con BigDecimal (evita errores de redondeo binario). result se redondea a 2 decimales (HALF_UP)."
+					},
+					"response": []
+				},
+				{
+					"name": "POST /calculate - missing field (400)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"num1\": 5\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/calculate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"calculate"
+							]
+						},
+						"description": "Falta num2 -> 400 Bad Request con el ErrorResponse centralizado.\n\n```json\n{\n  \"timestamp\": \"2026-07-10T04:06:40.643Z\",\n  \"status\": 400,\n  \"error\": \"Bad Request\",\n  \"message\": \"num2: num2 is required\",\n  \"path\": \"/api/v1/calculate\"\n}\n```"
+					},
+					"response": []
+				},
+				{
+					"name": "POST /calculate - malformed JSON (400)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{ \"num1\": 5, \"num2\": }"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/calculate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"calculate"
+							]
+						},
+						"description": "Body JSON malformado -> 400 Bad Request."
+					},
+					"response": []
+				},
+				{
+					"name": "POST /calculate - wrong type for num1 (400)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"num1\": \"abc\",\n  \"num2\": 5\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/calculate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"calculate"
+							]
+						},
+						"description": "num1 con tipo incorrecto (string en vez de número) -> 400 Bad Request."
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoint que suma dos números y les aplica el porcentaje dinámico del servicio externo (mockeado, con reintentos vía Resilience4j)."
+		},
+		{
+			"name": "Call History",
+			"item": [
+				{
+					"name": "GET /history - default pagination",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/history",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"history"
+							]
+						},
+						"description": "Historial de invocaciones, paginado y ordenado por timestamp descendente. page=0, size=20 por defecto. Ejecutá primero algunos requests a /calculate para ver contenido."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /history - with page & size",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/history?page=0&size=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"history"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "params/response se devuelven como objetos JSON anidados (jsonb en Postgres), no como string escapado."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /history - invalid page (negative, 400)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/history?page=-1&size=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"history"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "-1"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "page negativo -> 400 Bad Request (InvalidPaginationException)."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /history - invalid size (over max, 400)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/history?page=0&size=101",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"history"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "101"
+								}
+							]
+						},
+						"description": "size > 100 (MAX_PAGE_SIZE) -> 400 Bad Request."
+					},
+					"response": []
+				},
+				{
+					"name": "GET /history - non-numeric page (400)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/history?page=abc&size=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"history"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "abc"
+								},
+								{
+									"key": "size",
+									"value": "10"
+								}
+							]
+						},
+						"description": "page de un tipo no numérico -> 400 Bad Request."
+					},
+					"response": []
+				}
+			],
+			"description": "Historial de invocaciones a la API (éxitos y errores de validación, servicio externo caído, errores no controlados y rate limit), persistido de forma asíncrona. El propio /history no se auto-registra."
+		},
+		{
+			"name": "Rate Limiting",
+			"item": [
+				{
+					"name": "POST /calculate x4 - trigger 429 (run this request 4+ times within 1 minute)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"num1\": 1,\n  \"num2\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/calculate",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"calculate"
+							]
+						},
+						"description": "El rate limit es global (3 RPM) y compartido por todos los endpoints bajo /api/**, no por IP/cliente. Para verlo:\n\n1. Abrí este request en el Collection Runner.\n2. Configurá 4 iteraciones, 0ms de delay.\n3. Corré la colección: los primeros 3 requests devuelven 200, el 4to devuelve 429 con header `Retry-After` y el mismo `ErrorResponse` estándar en el body.\n\nAlternativa manual: apretá \"Send\" 4 veces rápido dentro del mismo minuto."
+					},
+					"response": []
+				}
+			],
+			"description": "Un único bucket global de 3 tokens (refill de 3 por minuto), compartido por /api/v1/calculate y /api/v1/history. Al superarlo responde 429 con header Retry-After."
+		},
+		{
+			"name": "Docs",
+			"item": [
+				{
+					"name": "GET /v3/api-docs (OpenAPI JSON)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/v3/api-docs",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"v3",
+								"api-docs"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /swagger-ui.html",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/swagger-ui.html",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"swagger-ui.html"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET /actuator/health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/actuator/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"actuator",
+								"health"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Documentación (springdoc-openapi) y endpoint de Actuator (management.endpoints.web.exposure.include: health)."
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+}
