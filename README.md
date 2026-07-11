@@ -238,18 +238,26 @@ El límite es **global**, compartido por todos los clientes que llamen a
 
 ```json
 {
-  "message": "Rate limit exceeded: maximum 3 requests per minute allowed.",
   "timestamp": "2026-07-10T05:27:46.364Z",
-  "retryAfter": 53
+  "status": 429,
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded: maximum 3 requests per minute allowed. Retry after 53 seconds.",
+  "path": "/api/v1/history"
 }
 ```
 
-con header `Retry-After` y status `429`.
+con header `Retry-After` y status `429`. El body usa el mismo `ErrorResponse`
+que el resto de los errores de la API (no un formato especial): el tiempo de
+espera va en el header y, en texto, dentro de `message`.
 
 ## Tests
 
 - **Unitarios** (`CalculationServiceTest`, `GlobalExceptionHandlerTest`):
   JUnit 5 + Mockito puro, sin contexto de Spring.
+- **Web slice** (`CalculationControllerErrorHandlingTest`,
+  `CallHistoryControllerErrorHandlingTest`): `@WebMvcTest` con
+  `addFilters = false` (para no arrastrar `RateLimitFilter`), verifican los
+  códigos y el body de error de cada controller en aislamiento.
 - **Integración liviana** (`PercentageProviderRetryIntegrationTest`): usa
   `ApplicationContextRunner` para levantar solo la autoconfiguración de
   Resilience4j + AOP y verificar el retry real, sin necesitar Postgres.
@@ -276,8 +284,8 @@ con header `Retry-After` y status `429`.
 - **Rate limiting con Bucket4j** (`OncePerRequestFilter` + `shouldNotFilter`
   para limitar el alcance a `/api/**`): un único bucket global de 3 tokens
   con refill de 3 cada minuto. Se eligió un límite global (no por IP/cliente)
-  porque es la interpretación literal de "aplicado globalmente"; migrar a
-  límite por cliente sería agregar una clave (IP, API key) al bucket.
+  porque es la interpretación literal de "la API debe soportar un máximo de 3 RPM (requests por minuto)"; migrar a límite por cliente sería agregar una clave (IP, API key) al bucket. Al principio se pensó en hacer el ajuste solo para el 
+  endpoint de cálculo, pero como la instruccion dice "la API" se dejaron los dos endpoints que tiene el servicio con el rate limit requerido.
 - **Historial asíncrono** (`@Async` + `CompletableFuture<Void>`): un
   `@Around` aspect intercepta `CalculationController.calculate(..)` y
   delega el guardado a `CallHistoryPort`, cuya implementación está anotada
