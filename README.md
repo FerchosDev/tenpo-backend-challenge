@@ -120,6 +120,25 @@ Por defecto corre con el perfil `dev` (`application-dev.yml`), que apunta a
 el contenedor de la API, apunta al hostname `postgres` en vez de
 `localhost`.
 
+### Opción C: usando la imagen publicada en Docker Hub
+
+No requiere clonar el repo completo ni tener Java/Maven instalado, solo
+Docker y el archivo [`docker-compose.hub.yml`](docker-compose.hub.yml)
+
+Imagen: [`vit3ro/tenpo-backend-challenge`](https://hub.docker.com/r/vit3ro/tenpo-backend-challenge)
+
+```bash
+docker compose -f docker-compose.hub.yml up -d
+```
+
+Igual que en la Opción A, `depends_on: condition: service_healthy` espera a
+que Postgres esté listo antes de levantar la API — no hace falta esperar a
+mano. Verificá con:
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
 ### Correr los tests
 
 ```bash
