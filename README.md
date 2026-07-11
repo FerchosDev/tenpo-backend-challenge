@@ -152,6 +152,9 @@ Con la app corriendo:
 - Swagger UI: http://localhost:8080/swagger-ui.html
 - OpenAPI JSON: http://localhost:8080/v3/api-docs
 
+También hay una colección de Postman lista para importar:
+[`postman/tenpo-backend-challenge.postman_collection.json`](postman/tenpo-backend-challenge.postman_collection.json).
+
 ## Endpoints y ejemplos
 
 ### `POST /api/v1/calculate`
