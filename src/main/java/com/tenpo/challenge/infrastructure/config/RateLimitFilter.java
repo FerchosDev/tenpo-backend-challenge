@@ -1,8 +1,9 @@
 package com.tenpo.challenge.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.tenpo.challenge.domain.model.CallHistory;
-import com.tenpo.challenge.domain.port.out.CallHistoryPort;
+import com.tenpo.challenge.domain.exception.RateLimitExceededException;
+import com.tenpo.challenge.infrastructure.adapter.in.web.CallHistoryRecorder;
+import com.tenpo.challenge.infrastructure.adapter.in.web.ErrorResponse;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
@@ -10,6 +11,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -17,7 +20,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,17 +29,19 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class RateLimitFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
+
     private static final int CAPACITY = 3;
     private static final Duration REFILL_PERIOD = Duration.ofMinutes(1);
     private static final String HISTORY_ENDPOINT = "/api/v1/history";
 
     private final Bucket bucket;
     private final ObjectMapper objectMapper;
-    private final CallHistoryPort callHistoryPort;
+    private final CallHistoryRecorder callHistoryRecorder;
 
-    public RateLimitFilter(ObjectMapper objectMapper, CallHistoryPort callHistoryPort) {
+    public RateLimitFilter(ObjectMapper objectMapper, CallHistoryRecorder callHistoryRecorder) {
         this.objectMapper = objectMapper;
-        this.callHistoryPort = callHistoryPort;
+        this.callHistoryRecorder = callHistoryRecorder;
         Bandwidth limit = Bandwidth.builder()
                 .capacity(CAPACITY)
                 .refillIntervally(CAPACITY, REFILL_PERIOD)
@@ -56,21 +60,23 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         long retryAfterSeconds = TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill());
-        String message = "Rate limit exceeded: maximum " + CAPACITY + " requests per minute allowed.";
-        RateLimitExceededResponse body = new RateLimitExceededResponse(message, Instant.now(), retryAfterSeconds);
+        RateLimitExceededException ex = new RateLimitExceededException(CAPACITY, retryAfterSeconds);
+        String requestUri = request.getRequestURI();
 
-        // Se loguea acá, no en CallHistoryLoggingAspect: el request nunca
-        // llega a despachar al controller, así que ese @Around nunca se
-        // ejecuta para las llamadas rechazadas por rate limit. No se
+        log.warn("Rate limit exceeded for {} {}: retry after {}s", request.getMethod(), requestUri, retryAfterSeconds);
+
+        // Se loguea en call history acá, no en CallHistoryLoggingAspect: el
+        // request nunca llega a despachar al controller, así que ese @Around
+        // nunca se ejecuta para las llamadas rechazadas por rate limit. No se
         // capturan params: leer el body acá lo consumiría antes de que
         // llegue (si acaso llegara) al controller. Se excluye el propio
         // endpoint de historial: no tiene sentido que una consulta al
-        // historial quede registrada dentro del historial.
-        if (!HISTORY_ENDPOINT.equals(request.getRequestURI())) {
-            callHistoryPort.save(new CallHistory(
-                    null, Instant.now(), request.getRequestURI(), null, null, message, HttpStatus.TOO_MANY_REQUESTS.value()));
+        // historial quede registrada dentro del historial (explicado en README).
+        if (!HISTORY_ENDPOINT.equals(requestUri)) {
+            callHistoryRecorder.record(requestUri, null, null, ex.getMessage(), HttpStatus.TOO_MANY_REQUESTS.value());
         }
 
+        ErrorResponse body = ErrorResponse.of(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage(), requestUri);
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader("Retry-After", String.valueOf(retryAfterSeconds));

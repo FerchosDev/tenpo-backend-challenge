@@ -2,7 +2,6 @@ package com.tenpo.challenge.infrastructure.adapter.in.web;
 
 import com.tenpo.challenge.domain.model.Calculation;
 import com.tenpo.challenge.domain.port.in.CalculationUseCase;
-import com.tenpo.challenge.infrastructure.config.RateLimitExceededResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -34,15 +33,16 @@ public class CalculationController {
             @ApiResponse(responseCode = "200", description = "Cálculo realizado con éxito",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = CalculationResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Error de validación en el request",
-                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = ErrorResponse.class))),
-            @ApiResponse(responseCode = "503", description = "Servicio externo de porcentaje no disponible tras agotar reintentos",
+            @ApiResponse(responseCode = "400", description = "Error de validación en el request: campos nulos, "
+                    + "de tipo incorrecto, o body JSON malformado",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                             schema = @Schema(implementation = ErrorResponse.class))),
             @ApiResponse(responseCode = "429", description = "Se superó el límite de 3 requests por minuto",
                     content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-                            schema = @Schema(implementation = RateLimitExceededResponse.class)))
+                            schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "503", description = "Servicio externo de porcentaje no disponible tras agotar reintentos",
+                    content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                            schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping("/calculate")
     public CalculationResponse calculate(@Valid @RequestBody CalculationRequest request) {

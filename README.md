@@ -83,7 +83,7 @@ para simetría.
 
 ## Cómo levantar el proyecto
 
-### Opción A: todo en Docker (recomendado, sin pasos manuales)
+### Opción A: todo en Docker (recomendado, levanta servicio y base de datos en conjunto)
 
 Prerequisito: Docker Desktop.
 
@@ -294,8 +294,9 @@ con header `Retry-After` y status `429`.
     invocar. `RateLimitFilter` loguea los rechazos por rate limit (429) de
     la misma forma, ya que ocurren en un filtro, antes del dispatch de
     Spring MVC. El propio `/api/v1/history` está excluido de este logueo
-    (no tendría sentido que una consulta al historial quede registrada
-    dentro del historial).
+    (por la logica del servicio me parece que no tendría sentido que una 
+    consulta al historial quede registrada, aunque en el punto 3 del documento
+    del challengue dice explicitamente: Implementa un endpoint para consultar un historial de todas las llamadas realizadas a los "endpoints" de la API.).
 - **`params`/`response` como `jsonb`, no texto**: `CallHistoryEntity` usa
   `@JdbcTypeCode(SqlTypes.JSON)` (Hibernate 6) con campos `JsonNode`, y
   `CallHistoryResponse` expone esos mismos campos como `JsonNode` en vez de

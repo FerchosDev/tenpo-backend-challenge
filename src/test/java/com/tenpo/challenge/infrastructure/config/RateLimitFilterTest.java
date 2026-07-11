@@ -33,7 +33,10 @@ class RateLimitFilterTest {
         ResponseEntity<Map> fourthResponse = restTemplate.getForEntity("/api/v1/history?page=0&size=1", Map.class);
 
         assertThat(fourthResponse.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
-        assertThat(fourthResponse.getBody()).containsKeys("message", "timestamp", "retryAfter");
+        assertThat(fourthResponse.getHeaders().getFirst("Retry-After")).isNotNull();
+        assertThat(fourthResponse.getBody()).containsKeys("timestamp", "status", "error", "message", "path");
+        assertThat(fourthResponse.getBody()).containsEntry("status", 429);
+        assertThat(fourthResponse.getBody()).containsEntry("path", "/api/v1/history");
     }
 
 }
